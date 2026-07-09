@@ -1,0 +1,10 @@
+{
+  "name": "English Placement Test",
+  "description": "Hệ thống thi đánh giá năng lực tiếng Anh đầu vào chuyên nghiệp, giao diện hiện đại phong cách IELTS/Cambridge, chống gian lận và tự động chấm điểm với AI.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

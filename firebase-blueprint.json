@@ -1,0 +1,89 @@
+{
+  "entities": {
+    "AdminConfig": {
+      "title": "AdminConfig",
+      "description": "Administrator password hash configuration",
+      "type": "object",
+      "properties": {
+        "adminPasswordHash": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "AppSetting": {
+      "title": "AppSetting",
+      "description": "Global application configuration",
+      "type": "object",
+      "properties": {
+        "logoUrl": { "type": "string" },
+        "themeColor": { "type": "string" },
+        "slogan": { "type": "string" },
+        "teacherPhone": { "type": "string" },
+        "teacherEmail": { "type": "string" },
+        "geminiApiKey": { "type": "string" }
+      }
+    },
+    "Material": {
+      "title": "Material",
+      "description": "Study and reference materials for candidates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "url": { "type": "string" },
+        "type": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "Exam": {
+      "title": "Exam",
+      "description": "Test questions definition",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "durationMinutes": { "type": "number" },
+        "audio1Url": { "type": "string" },
+        "audio2Url": { "type": "string" },
+        "questions": { "type": "object" }
+      }
+    },
+    "Candidate": {
+      "title": "Candidate",
+      "description": "Candidate registration and test attempts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fullName": { "type": "string" },
+        "phone": { "type": "string" },
+        "submittedAt": { "type": "string" },
+        "isLocked": { "type": "boolean" },
+        "scores": { "type": "object" }
+      }
+    }
+  },
+  "firestore": {
+    "/admins/config": {
+      "schema": "AdminConfig",
+      "description": "Admin security credentials"
+    },
+    "/settings/global": {
+      "schema": "AppSetting",
+      "description": "App settings"
+    },
+    "/materials/{materialId}": {
+      "schema": "Material",
+      "description": "Study materials"
+    },
+    "/exams/{examId}": {
+      "schema": "Exam",
+      "description": "Exam definitions"
+    },
+    "/candidates/{candidateId}": {
+      "schema": "Candidate",
+      "description": "Candidates details"
+    }
+  }
+}
