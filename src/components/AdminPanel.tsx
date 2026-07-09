@@ -802,9 +802,16 @@ export default function AdminPanel({ onBackToTest }: AdminPanelProps) {
                   <div key={qIndex} className="bg-white border border-slate-250 rounded-xl p-4 shadow-xs hover:border-indigo-200 transition-all space-y-3 relative">
                     {/* Header: Select skill for this question */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-2">
-                      <span className="text-[10px] font-black text-indigo-900 bg-indigo-50 px-2 py-0.5 rounded-md self-start uppercase">
-                        Câu {qIndex + 1} ({q.type === 'mcq' ? 'Trắc nghiệm' : q.type === 'blank' ? 'Điền khuyết' : q.type === 'writing' ? 'Tự luận viết' : 'Nói'})
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-black text-indigo-900 bg-indigo-50 px-2 py-0.5 rounded-md self-start uppercase">
+                          Câu {qIndex + 1} ({q.type === 'mcq' ? 'Trắc nghiệm' : q.type === 'blank' ? 'Điền khuyết' : q.type === 'writing' ? 'Tự luận viết' : 'Nói'})
+                        </span>
+                        {q.needs_review && (
+                          <span className="text-[9px] font-bold text-amber-800 bg-amber-100 border border-amber-250 px-2 py-0.5 rounded-md uppercase animate-pulse">
+                            ⚠️ Cần rà soát
+                          </span>
+                        )}
+                      </div>
                       
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-bold text-slate-500 shrink-0 uppercase">Kỹ năng (Skill):</span>

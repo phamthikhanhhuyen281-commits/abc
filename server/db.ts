@@ -419,7 +419,14 @@ class DatabaseManager {
     }
 
     if (candidate.submittedAt) {
-      throw new Error('Bài thi đã nộp, không thể thay đổi đáp án.');
+      // Allow background speaking evaluation to be saved even if the exam is already submitted
+      const isAiEvaluation = answersUpdate && 
+        answersUpdate.speakingPart1 && 
+        answersUpdate.speakingPart1.aiEvaluation !== undefined;
+
+      if (!isAiEvaluation) {
+        throw new Error('Bài thi đã nộp, không thể thay đổi đáp án.');
+      }
     }
 
     // Merge answers

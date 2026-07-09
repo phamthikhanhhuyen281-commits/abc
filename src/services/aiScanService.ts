@@ -8,6 +8,7 @@ export interface ScannedQuestion {
   answer?: string;
   suggestedSkill: 'listeningPart1' | 'listeningPart2' | 'grammar' | 'vocabulary' | 'readingPartA' | 'readingPartB' | 'writing' | 'speaking';
   passage?: string;
+  needs_review?: boolean;
 }
 
 export interface ScannedExamResult {
@@ -40,25 +41,60 @@ export const aiScanService = {
     });
 
     const promptText = `
-      You are an expert English Language examiner. Your task is to scan the attached file/image/PDF of an English test/exam and extract ALL questions EXACTLY as they appear in the image.
-      
-      CRITICAL REQUIREMENT:
-      - Extract ONLY the actual questions present in the scanned material. Do NOT invent, generate, or add any mock/placeholder questions that are not present in the image.
-      - For each scanned question, identify its properties (text, options, answer) and make a smart guess for which skill section it belongs to: "listeningPart1", "listeningPart2", "grammar", "vocabulary", "readingPartA", "readingPartB", "writing", or "speaking".
-      
-      Structure the JSON output exactly with these specifications:
-      1. "title": A descriptive title for the exam in Vietnamese (extracted from the image if present, or suggested).
-      2. "description": A short summary of the scanned test in Vietnamese.
-      3. "durationMinutes": Duration of the test (number of minutes, e.g. 45 or 60, default to 60 if not specified).
-      4. "questions": An array of questions extracted from the document. Each question must have:
-          - "text": The exact text of the question found in the image.
-          - "type": "mcq" (if it has multiple choice options), "blank" (if it is fill-in-the-blank), "writing" (if it is translation/essay), or "speaking" (if it is speaking).
-          - "options": An array of strings representing options (e.g., ["option 1", "option 2", ...]) ONLY if type is "mcq".
-          - "answer": The correct answer (e.g., "A", "B", "C", "D" for MCQs, or the word/sentence for blank/writing).
-          - "suggestedSkill": The suggested target skill for this question. Choose one of: "listeningPart1", "listeningPart2", "grammar", "vocabulary", "readingPartA", "readingPartB", "writing", "speaking".
-          - "passage": (Optional) The context passage text if the question is part of a reading passage or has a context paragraph.
+      Bạn là AI hỗ trợ import tài liệu vào đề thi. Nhiệm vụ của bạn là phân tích file mà admin tải lên (ảnh chụp đề thi, ảnh chụp màn hình hoặc file PDF) và tự động nhận diện nội dung.
 
-      Output valid JSON matching this schema exactly.
+      ## QUY TẮC PHÂN TÍCH:
+      1. KHÔNG GIẢ ĐỊNH file có đầy đủ cả 4 kỹ năng (Listening, Reading, Writing, Speaking).
+      2. Tự xác định file tải lên thuộc về những kỹ năng/nhóm câu hỏi nào:
+         - Listening (Nghe)
+         - Reading (Đọc)
+         - Writing (Viết)
+         - Speaking (Nói)
+         - Grammar/Vocabulary (Ngữ pháp & Từ vựng độc lập)
+         - Hoặc chứa nhiều kỹ năng kết hợp nếu có.
+      3. CHỈ TẠO dữ liệu cho những kỹ năng thực sự xuất hiện trong file. Ví dụ:
+         - File chỉ có Reading -> chỉ tạo Reading (readingPartA hoặc readingPartB).
+         - File chỉ có Speaking -> chỉ tạo Speaking.
+         - File gồm Reading + Writing -> chỉ tạo Reading và Writing.
+         - File gồm cả 4 kỹ năng -> tạo đủ cả 4.
+      4. Với mỗi kỹ năng được phát hiện, trích xuất cấu trúc tương ứng như sau:
+         ### Reading (Đọc hiểu):
+         - Tách từng passage (đoạn văn ngữ cảnh).
+         - Xác định Part/Passage tương ứng.
+         - Tách các dạng bài (MCQ - Trắc nghiệm, T/F/NG - Đúng/Sai/Không đề cập, Matching - Nối cột/Nối câu,...).
+         - Ghép đáp án đúng nếu có.
+         - Định nghĩa "suggestedSkill" là: "readingPartA" (cho MCQ chọn từ đọc hiểu) hoặc "readingPartB" (cho Đúng/Sai/Không đề cập hoặc Matching).
+
+         ### Listening (Nghe hiểu):
+         - Tách từng Part bài nghe.
+         - Lưu transcript (nội dung text nghe) vào trường "passage" nếu có sẵn trong file tài liệu.
+         - Ghép link audio nếu có đề cập rõ.
+         - Tách rõ ràng từng câu hỏi và đáp án lựa chọn tương ứng.
+         - Định nghĩa "suggestedSkill" là: "listeningPart1" (cho trắc nghiệm bài nghe) hoặc "listeningPart2" (cho điền khuyết/viết từ bài nghe).
+
+         ### Writing (Viết luận):
+         - Tách Task 1, Task 2 (nếu có).
+         - Lưu trữ đề bài (prompt), mô tả hình ảnh hoặc đề bài mẫu, sample answer (bài viết mẫu), thang điểm band điểm mục tiêu (nếu có).
+         - Định nghĩa "suggestedSkill" là "writing".
+
+         ### Speaking (Nói):
+         - Tách Part 1, Part 2, Part 3 của bài nói.
+         - Lưu lại cue card, các câu hỏi gợi ý và câu hỏi follow-up (câu hỏi phụ theo sau) trong đề.
+         - Định nghĩa "suggestedSkill" là "speaking".
+
+         ### Grammar / Vocabulary:
+         - Nếu là các câu trắc nghiệm ngữ pháp độc lập ngắn, gán "suggestedSkill" là "grammar".
+         - Nếu là câu trắc nghiệm từ vựng độc lập ngắn, gán "suggestedSkill" là "vocabulary".
+
+      5. Nếu file chứa nhiều đề thi (ví dụ Test 1, Test 2, Test 3...), hãy tự động phân tách và gom chúng lại thành nhiều đề độc lập, gán tên "title" rõ ràng theo từng bộ đề phân tách được.
+      6. Nếu có phần đáp án (Answer Key) ở cuối file, hãy tự động phân tích và ghép chính xác đáp án đúng (A, B, C, D hoặc nội dung văn bản cụ thể) tương ứng vào từng câu hỏi.
+      7. Nếu bạn không chắc chắn về bất kỳ phần thông tin nào trong câu hỏi bóc tách, hoặc cần giáo viên rà soát lại, hãy đánh dấu: "needs_review": true cho câu hỏi đó.
+      8. Xuất kết quả dưới dạng JSON có cấu trúc khớp hoàn toàn với specifications được cung cấp ở schema.
+
+      LƯU Ý:
+      - Tuyệt đối không tạo ra kỹ năng hoặc dữ liệu không tồn tại trong file.
+      - Không được bỏ sót bất kỳ nội dung câu hỏi nào xuất hiện trong tài liệu.
+      - Ưu tiên giữ nguyên định dạng, từ ngữ và nội dung gốc của câu hỏi.
     `;
 
     // Strip metadata if present in base64Data (e.g. "data:image/jpeg;base64,...")
@@ -108,7 +144,8 @@ export const aiScanService = {
                         "speaking"
                       ] 
                     },
-                    passage: { type: Type.STRING }
+                    passage: { type: Type.STRING },
+                    needs_review: { type: Type.BOOLEAN }
                   },
                   required: ["text", "type", "suggestedSkill"]
                 }

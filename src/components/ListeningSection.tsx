@@ -158,8 +158,12 @@ export default function ListeningSection({
     setAudio1State('playing');
 
     if (audio1Ref.current) {
-      audio1Ref.current.play().catch((err) => {
-        console.error('Audio 1 playback failed:', err);
+      audio1Ref.current.play().catch((err: any) => {
+        if (err && (err.name === 'AbortError' || err.message?.includes('interrupted'))) {
+          console.log('Audio 1 playback was interrupted or aborted (normal browser unmount behavior).');
+        } else {
+          console.error('Audio 1 playback encountered error:', err);
+        }
       });
     }
   };
@@ -172,8 +176,12 @@ export default function ListeningSection({
     setAudio2State('playing');
 
     if (audio2Ref.current) {
-      audio2Ref.current.play().catch((err) => {
-        console.error('Audio 2 playback failed:', err);
+      audio2Ref.current.play().catch((err: any) => {
+        if (err && (err.name === 'AbortError' || err.message?.includes('interrupted'))) {
+          console.log('Audio 2 playback was interrupted or aborted (normal browser unmount behavior).');
+        } else {
+          console.error('Audio 2 playback encountered error:', err);
+        }
       });
     }
   };
