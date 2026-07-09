@@ -16,5 +16,8 @@ service cloud.firestore {
     match /candidates/{document} {
       allow read, write: if true;
     }
+    match /candidate_audios/{document} {
+      allow read, write: if true;
+    }
   }
 }

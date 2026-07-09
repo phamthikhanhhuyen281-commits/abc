@@ -2,6 +2,24 @@ import { ref, uploadBytes, getDownloadURL, uploadString } from 'firebase/storage
 import { storage, db } from '../firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
+// Helper to wrap promises with a timeout
+const withTimeout = <T>(promise: Promise<T>, ms: number, errorMessage = 'Timeout'): Promise<T> => {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(errorMessage));
+    }, ms);
+    promise
+      .then((res) => {
+        clearTimeout(timer);
+        resolve(res);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+};
+
 export const storageService = {
   /**
    * Upload a File object (from file input / drag & drop) to Firebase Storage
@@ -45,31 +63,53 @@ export const storageService = {
       }
       
       const fileRef = ref(storage, `candidates/${candidateId}/${part}.${ext}`);
-      const snap = await uploadString(fileRef, cleanBase64, 'base64', {
-        contentType
-      });
-      const downloadUrl = await getDownloadURL(snap.ref);
+      
+      // Use 4-second timeout to prevent hanging on unconfigured Firebase Storage
+      const snap = await withTimeout(
+        uploadString(fileRef, cleanBase64, 'base64', { contentType }),
+        4000,
+        'Firebase Storage upload timed out'
+      );
+      
+      // Use 3-second timeout for URL retrieval
+      const downloadUrl = await withTimeout(
+        getDownloadURL(snap.ref),
+        3000,
+        'Firebase Storage getDownloadURL timed out'
+      );
+      
       console.log('Successfully saved speaking recording to Firebase Storage:', downloadUrl);
       return downloadUrl;
     } catch (err) {
-      console.warn('Firebase Storage upload failed (probably requires upgraded Blaze plan). Falling back to Firestore collection...');
+      console.warn('Firebase Storage upload failed or timed out. Falling back to Firestore collection... Error:', err);
     }
 
     // 2. Fall back to storing in a custom Firestore collection "candidate_audios"
-    // This is 100% persistent, card-less, completely free, and avoids the 1MB candidate document size limit.
-    try {
-      const docId = `${candidateId}_${part}`;
-      const docRef = doc(db, 'candidate_audios', docId);
-      await setDoc(docRef, {
-        candidateId,
-        part,
-        audioData: base64Data,
-        createdAt: new Date().toISOString()
-      });
-      console.log('Successfully saved speaking recording to Firestore collection candidate_audios:', docId);
-      return `db_audio:${docId}`;
-    } catch (err) {
-      console.warn('Firestore fallback audio saving failed, trying local Express server fallback:', err);
+    // Only attempt this if the payload is under 1MB to avoid Firestore document limits
+    if (base64Data.length < 1000000) {
+      try {
+        const docId = `${candidateId}_${part}`;
+        const docRef = doc(db, 'candidate_audios', docId);
+        
+        // Use 4-second timeout to prevent Firestore writes from hanging
+        await withTimeout(
+          setDoc(docRef, {
+            candidateId,
+            part,
+            audioData: base64Data,
+            createdAt: new Date().toISOString()
+          }),
+          4000,
+          'Firestore audio upload timed out'
+        );
+        
+        console.log('Successfully saved speaking recording to Firestore collection candidate_audios:', docId);
+        return `db_audio:${docId}`;
+      } catch (err) {
+        console.warn('Firestore fallback audio saving failed, trying local Express server fallback:', err);
+      }
+    } else {
+      console.warn('Audio data is too large for Firestore document limit (>1MB). Skipping Firestore fallback...');
     }
 
     // 3. Fall back to local Express server storage (for local development or when Firebase is not configured)

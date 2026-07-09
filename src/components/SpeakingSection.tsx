@@ -67,16 +67,16 @@ export default function SpeakingSection({
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      let options: any = {};
+      let options: any = { audioBitsPerSecond: 24000 };
       if (typeof MediaRecorder.isTypeSupported === 'function') {
         if (MediaRecorder.isTypeSupported('audio/webm')) {
-          options = { mimeType: 'audio/webm' };
+          options.mimeType = 'audio/webm';
         } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-          options = { mimeType: 'audio/mp4' };
+          options.mimeType = 'audio/mp4';
         } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
-          options = { mimeType: 'audio/ogg' };
+          options.mimeType = 'audio/ogg';
         } else if (MediaRecorder.isTypeSupported('audio/wav')) {
-          options = { mimeType: 'audio/wav' };
+          options.mimeType = 'audio/wav';
         }
       }
       

@@ -1,5 +1,6 @@
 import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
+import { signInAnonymously } from 'firebase/auth';
 import { examService } from './examService';
 
 export interface CandidateLog {
@@ -196,6 +197,21 @@ export function autoGradeCandidate(candidate: Candidate, exam: any): Candidate['
 }
 
 export const candidateService = {
+  async ensureAnonymousAuth(): Promise<void> {
+    try {
+      if (!auth.currentUser) {
+        // Use a 2-second race timeout so it never blocks normal database retrieval
+        await Promise.race([
+          signInAnonymously(auth),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Auth Timeout')), 2000))
+        ]);
+        console.log('Successfully signed in anonymously for Firebase Storage auth context');
+      }
+    } catch (err) {
+      console.warn('Anonymous sign-in skipped/failed:', err);
+    }
+  },
+
   async getCandidates(): Promise<Candidate[]> {
     try {
       const colRef = collection(db, 'candidates');
@@ -213,6 +229,7 @@ export const candidateService = {
 
   async getCandidateById(id: string): Promise<Candidate | null> {
     try {
+      await this.ensureAnonymousAuth();
       const docRef = doc(db, 'candidates', id);
       const snap = await getDoc(docRef);
       if (snap.exists()) {
@@ -248,6 +265,7 @@ export const candidateService = {
     exam: any;
     restoredAnswers: Record<string, string>;
   }> {
+    await this.ensureAnonymousAuth();
     const trimmedPhone = phone.trim();
     const isLocked = await this.checkIsPhoneLocked(trimmedPhone);
     if (isLocked) {
@@ -412,7 +430,7 @@ export const candidateService = {
     };
   },
 
-  async updateAnswers(id: string, answersUpdate: Partial<Candidate['answers']>, durationSeconds?: number): Promise<Candidate> {
+  async updateAnswers(id: string, answersUpdate: any, durationSeconds?: number): Promise<Candidate> {
     const candidate = await this.getCandidateById(id);
     if (!candidate) {
       throw new Error('Không tìm thấy thông tin thí sinh.');
@@ -422,17 +440,72 @@ export const candidateService = {
       throw new Error('Bài thi đã nộp, không thể thay đổi đáp án.');
     }
 
+    // Initialize nested structure from existing candidate answers
     const mergedAnswers = {
-      listeningPart1: { ...(candidate.answers?.listeningPart1 || {}), ...(answersUpdate.listeningPart1 || {}) },
-      listeningPart2: { ...(candidate.answers?.listeningPart2 || {}), ...(answersUpdate.listeningPart2 || {}) },
-      grammar: { ...(candidate.answers?.grammar || {}), ...(answersUpdate.grammar || {}) },
-      vocabulary: { ...(candidate.answers?.vocabulary || {}), ...(answersUpdate.vocabulary || {}) },
-      readingPartA: { ...(candidate.answers?.readingPartA || {}), ...(answersUpdate.readingPartA || {}) },
-      readingPartB: { ...(candidate.answers?.readingPartB || {}), ...(answersUpdate.readingPartB || {}) },
-      speakingPart1: { ...(candidate.answers?.speakingPart1 || {}), ...(answersUpdate.speakingPart1 || {}) },
-      speakingPart2: { ...(candidate.answers?.speakingPart2 || {}), ...(answersUpdate.speakingPart2 || {}) },
-      writing: { ...(candidate.answers?.writing || {}), ...(answersUpdate.writing || {}) }
+      listeningPart1: { ...(candidate.answers?.listeningPart1 || {}) },
+      listeningPart2: { ...(candidate.answers?.listeningPart2 || {}) },
+      grammar: { ...(candidate.answers?.grammar || {}) },
+      vocabulary: { ...(candidate.answers?.vocabulary || {}) },
+      readingPartA: { ...(candidate.answers?.readingPartA || {}) },
+      readingPartB: { ...(candidate.answers?.readingPartB || {}) },
+      speakingPart1: { ...(candidate.answers?.speakingPart1 || { audioPath: null, aiEvaluation: null }) },
+      speakingPart2: { ...(candidate.answers?.speakingPart2 || { sp_1_audioPath: null, sp_2_audioPath: null, sp_3_audioPath: null }) },
+      writing: { ...(candidate.answers?.writing || {}) }
     };
+
+    // Unflatten or merge answersUpdate
+    if (answersUpdate) {
+      Object.entries(answersUpdate).forEach(([key, val]: [string, any]) => {
+        // If it is a nested section object, merge it
+        if (key === 'listeningPart1' && typeof val === 'object' && val !== null) {
+          mergedAnswers.listeningPart1 = { ...mergedAnswers.listeningPart1, ...val };
+        } else if (key === 'listeningPart2' && typeof val === 'object' && val !== null) {
+          mergedAnswers.listeningPart2 = { ...mergedAnswers.listeningPart2, ...val };
+        } else if (key === 'grammar' && typeof val === 'object' && val !== null) {
+          mergedAnswers.grammar = { ...mergedAnswers.grammar, ...val };
+        } else if (key === 'vocabulary' && typeof val === 'object' && val !== null) {
+          mergedAnswers.vocabulary = { ...mergedAnswers.vocabulary, ...val };
+        } else if (key === 'readingPartA' && typeof val === 'object' && val !== null) {
+          mergedAnswers.readingPartA = { ...mergedAnswers.readingPartA, ...val };
+        } else if (key === 'readingPartB' && typeof val === 'object' && val !== null) {
+          mergedAnswers.readingPartB = { ...mergedAnswers.readingPartB, ...val };
+        } else if (key === 'speakingPart1' && typeof val === 'object' && val !== null) {
+          mergedAnswers.speakingPart1 = { ...mergedAnswers.speakingPart1, ...val };
+        } else if (key === 'speakingPart2' && typeof val === 'object' && val !== null) {
+          mergedAnswers.speakingPart2 = { ...mergedAnswers.speakingPart2, ...val };
+        } else if (key === 'writing' && typeof val === 'object' && val !== null) {
+          mergedAnswers.writing = { ...mergedAnswers.writing, ...val };
+        } else {
+          // It's a flat key! Map it to the correct section
+          if (key.startsWith('l1_')) {
+            mergedAnswers.listeningPart1[key] = val;
+          } else if (key.startsWith('l2_')) {
+            mergedAnswers.listeningPart2[key] = val;
+          } else if (key.startsWith('g_')) {
+            mergedAnswers.grammar[key] = val;
+          } else if (key.startsWith('v_')) {
+            mergedAnswers.vocabulary[key] = val;
+          } else if (key.startsWith('r_')) {
+            // Is it part A or part B?
+            if (key === 'r_1' || key === 'r_2') {
+              mergedAnswers.readingPartA[key] = val;
+            } else {
+              mergedAnswers.readingPartB[key] = val;
+            }
+          } else if (key.startsWith('w_')) {
+            mergedAnswers.writing[key] = val;
+          } else if (key === 'speaking_p1') {
+            mergedAnswers.speakingPart1.audioPath = val;
+          } else if (key === 'speaking_p2_q1') {
+            mergedAnswers.speakingPart2.sp_1_audioPath = val;
+          } else if (key === 'speaking_p2_q2') {
+            mergedAnswers.speakingPart2.sp_2_audioPath = val;
+          } else if (key === 'speaking_p2_q3') {
+            mergedAnswers.speakingPart2.sp_3_audioPath = val;
+          }
+        }
+      });
+    }
 
     const updates: any = { answers: mergedAnswers };
     if (durationSeconds !== undefined) {
